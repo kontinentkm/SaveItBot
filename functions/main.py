@@ -72,8 +72,7 @@ def _collect_media_files(dir_path: Path) -> List[Path]:
 
 def download_instagram_media(url: str, cookies_file: Optional[str], timeout_s: int) -> Tuple[Path, List[Path]]:
     """
-    Скачивает медиа с Instagram‑ссылки (post/reel/story/highlight) через yt-dlp.
-    Возвращает (tmpdir, [список файлов]).
+    Скачивает медиа с Instagram‑ссылки через yt-dlp с маскировкой под браузер.
     """
     tmpdir = Path(tempfile.mkdtemp(prefix="igdl_"))
     outtmpl = str(tmpdir / "%(id)s_%(playlist_index)03d.%(ext)s")
@@ -85,22 +84,34 @@ def download_instagram_media(url: str, cookies_file: Optional[str], timeout_s: i
         "retries": 3,
         "socket_timeout": timeout_s,
         "noprogress": True,
-        "format": "bestvideo+bestaudio/best",
-        "merge_output_format": "mp4",
+        "format": "best",
+        # --- ДОБАВЛЯЕМ МАСКИРОВКУ ---
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
     }
+
     if cookies_file:
         ydl_opts["cookiefile"] = cookies_file
 
     try:
+        print(f"DEBUG: Starting download for {url}")
         with YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
+
         files = _collect_media_files(tmpdir)
+        print(f"DEBUG: Downloaded files: {files}")
+
         media_files: List[Path] = []
         for f in files:
             if f.suffix.lower() in MEDIA_EXTS:
                 media_files.append(f)
         return tmpdir, media_files
-    except Exception:
+    except Exception as e:
+        print(f"CRITICAL ERROR in download: {e}")
+        import traceback
+        traceback.print_exc()
         shutil.rmtree(tmpdir, ignore_errors=True)
         raise
 
